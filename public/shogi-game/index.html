@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THE将棋</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Startup Screen -->
+        <div id="start-screen" class="screen active">
+            <h1 class="title">THE将棋</h1>
+            <div class="menu-buttons">
+                <button id="btn-com" class="menu-btn">コンピュータと対戦</button>
+                <button id="btn-online" class="menu-btn">ネット対戦</button>
+            </div>
+        </div>
+
+        <!-- Difficulty Selection Screen -->
+        <div id="difficulty-screen" class="screen">
+            <h2>難易度選択</h2>
+            <div class="menu-buttons">
+                <button data-level="easy" class="menu-btn diff-btn">やさしい</button>
+                <button data-level="normal" class="menu-btn diff-btn">普通</button>
+                <button data-level="hard" class="menu-btn diff-btn">強い</button>
+                <button data-level="expert" class="menu-btn diff-btn">激ムズ</button>
+                <button id="btn-back-diff" class="menu-btn secondary">戻る</button>
+            </div>
+        </div>
+
+        <!-- Matching Screen -->
+        <div id="matching-screen" class="screen">
+            <h2>対戦相手を探しています...</h2>
+            <p id="matching-status">接続中...</p>
+            <button id="btn-cancel-matching" class="menu-btn secondary">キャンセル</button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+
+            <!-- Status bar -->
+            <div class="game-status-bar">
+                <button id="btn-resign" class="control-btn">投了</button>
+                <div id="game-status">対局中</div>
+            </div>
+
+            <!-- Opponent hand (top, horizontal) -->
+            <div id="opponent-hand" class="hand-bar hand-top">
+                <span class="hand-bar-label">後手持駒：</span>
+                <div class="hand-pieces" id="opponent-pieces"></div>
+            </div>
+
+            <!-- Board (center, takes all remaining space) -->
+            <div class="board-wrapper">
+                <div id="shogi-board" class="board"></div>
+            </div>
+
+            <!-- Player hand (bottom, horizontal) -->
+            <div id="player-hand" class="hand-bar hand-bottom">
+                <span class="hand-bar-label">先手持駒：</span>
+                <div class="hand-pieces" id="player-pieces"></div>
+            </div>
+
+            <!-- Promotion Dialog -->
+            <div id="promote-dialog" class="modal hidden">
+                <div class="modal-content">
+                    <p>成りますか？</p>
+                    <div class="modal-buttons">
+                        <button id="btn-promote-yes" class="modal-btn yes">成る</button>
+                        <button id="btn-promote-no" class="modal-btn no">成らない</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Role Announcement Dialog -->
+            <div id="role-dialog" class="modal hidden">
+                <div class="modal-content">
+                    <h2 id="role-title"></h2>
+                    <p id="role-message"></p>
+                    <button id="btn-role-ok" class="modal-btn yes">対局開始</button>
+                </div>
+            </div>
+
+            <!-- Result Dialog -->
+            <div id="result-dialog" class="modal hidden">
+                <div class="modal-content">
+                    <h2 id="result-title">勝負あり！</h2>
+                    <p id="result-message"></p>
+                    <button id="btn-return-title" class="modal-btn">タイトルへ戻る</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/shogi.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/network.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
