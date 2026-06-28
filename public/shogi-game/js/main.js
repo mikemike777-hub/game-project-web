@@ -50,6 +50,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return player === SENTE ? GOTE : SENTE;
     }
 
+    function finishCheckmateIfNeeded(playerToMove) {
+        if (game.isGameOver || !game.isCheckmated(playerToMove)) return false;
+
+        game.isGameOver = true;
+        game.winner = winnerOf(playerToMove);
+        game.turn = game.winner;
+        ui.render();
+
+        if (!isOnline && playerToMove === aiPlayerId) {
+            setTimeout(() => {
+                ui.showSurrenderDialog();
+            }, 300);
+        }
+
+        return true;
+    }
+
     // Event Listeners
     document.getElementById('btn-com').addEventListener('click', () => {
         isOnline = false;
@@ -152,12 +169,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle turns
     document.addEventListener('game-move', async () => {
         ui.render();
+        const playerToMove = game.turn;
 
         // Online: Send move if it was my turn
         if (isOnline) {
             const lastMoveIdx = game.history.length - 1;
             const lastMove = game.history[lastMoveIdx];
-            if (!lastMove || lastMoveIdx <= lastSentMoveIndex) return;
+            if (!lastMove || lastMoveIdx <= lastSentMoveIndex) {
+                finishCheckmateIfNeeded(playerToMove);
+                return;
+            }
 
             // If it is now the OPPONENT'S turn, I must have just successfully moved.
             if (game.turn !== myPlayerId) {
@@ -178,6 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             }
+
+            finishCheckmateIfNeeded(playerToMove);
+            return;
         }
 
         if (!isOnline && !game.isGameOver && game.turn === aiPlayerId && ai) {
@@ -185,27 +209,13 @@ document.addEventListener('DOMContentLoaded', () => {
             isProcessing = true;
 
             try {
-                const aiMoves = game.getLegalMoves(aiPlayerId);
-                if (aiMoves.length === 0) {
-                    game.isGameOver = true;
-                    game.winner = myPlayerId;
-                    ui.render();
-                    setTimeout(() => {
-                        ui.showSurrenderDialog();
-                    }, 300);
-                    return;
-                }
+                if (finishCheckmateIfNeeded(aiPlayerId)) return;
 
                 await ai.makeMove();
                 await ui.onMoveMade();
 
                 if (!game.isGameOver) {
-                    const playerMoves = game.getLegalMoves(myPlayerId);
-                    if (playerMoves.length === 0) {
-                        game.isGameOver = true;
-                        game.winner = aiPlayerId;
-                        ui.render();
-                    }
+                    finishCheckmateIfNeeded(myPlayerId);
                 }
             } finally {
                 isProcessing = false;

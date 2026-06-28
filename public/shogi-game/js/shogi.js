@@ -365,16 +365,20 @@ class Shogi {
 
         try {
             if (!this.isInCheck(opponent)) return false;
-            return !this.hasRuleLegalEscape(opponent);
+            return !this.hasRuleLegalEscape(opponent, { skipPawnDropMate: true });
         } finally {
             this.board[x][y] = previous;
         }
     }
 
-    hasRuleLegalEscape(player) {
+    isCheckmated(player) {
+        return this.isInCheck(player) && !this.hasRuleLegalEscape(player);
+    }
+
+    hasRuleLegalEscape(player, options = {}) {
         const moves = this.getPseudoMoves(player, {
             includeIllegalDrops: false,
-            skipPawnDropMate: true
+            skipPawnDropMate: Boolean(options.skipPawnDropMate)
         });
 
         return moves.some(move => {
