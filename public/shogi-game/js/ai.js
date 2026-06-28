@@ -4,6 +4,7 @@ class AI {
         this.level = level; // 'easy', 'normal', 'hard', 'expert'
         this.nodesVisited = 0;
         this.transpositionTable = new Map();
+        this.searchDeadline = 0;
 
         // Piece Values (Base)
         this.VALUES = {
@@ -27,6 +28,8 @@ class AI {
     async makeMove() {
         this.nodesVisited = 0;
         this.transpositionTable.clear();
+        const budget = this.getTimeBudget();
+        this.searchDeadline = budget ? Date.now() + budget : 0;
 
         return new Promise(resolve => {
             const startTime = Date.now();
@@ -52,7 +55,7 @@ class AI {
 
             // Visual delay if search was too fast
             const elapsed = Date.now() - startTime;
-            const delay = Math.max(0, 500 - elapsed);
+            const delay = Math.max(0, 180 - elapsed);
 
             setTimeout(() => {
                 console.log(`AI [${this.level}] Nodes: ${this.nodesVisited}, Time: ${elapsed}ms`);
@@ -92,13 +95,13 @@ class AI {
     }
 
     searchNormal(moves, color) {
-        const depth = 3;
+        const depth = 2;
         const result = this.alphaBeta(depth, -Infinity, Infinity, true, color);
         return result.move || moves[Math.floor(Math.random() * moves.length)];
     }
 
     searchHard(moves, color) {
-        const depth = 5;
+        const depth = 3;
         // Use move ordering and fuller evaluation
         const result = this.alphaBeta(depth, -Infinity, Infinity, true, color);
         return result.move || moves[Math.floor(Math.random() * moves.length)];
@@ -106,8 +109,8 @@ class AI {
 
     searchExpert(moves, color) {
         // Iterative Deepening
-        const maxDepth = 8;
-        const timeLimit = 2500;
+        const maxDepth = 5;
+        const timeLimit = 1100;
         const startTime = Date.now();
         let currentBestMove = moves[0];
 
@@ -117,6 +120,7 @@ class AI {
 
             const result = this.alphaBeta(d, -Infinity, Infinity, true, color);
             if (result.move) currentBestMove = result.move;
+            if (this.isTimeUp()) break;
         }
         return currentBestMove;
     }
@@ -125,9 +129,12 @@ class AI {
 
     alphaBeta(depth, alpha, beta, isMax, color) {
         this.nodesVisited++;
+        if (this.isTimeUp()) {
+            return { score: this.evaluate() * (color === SENTE ? 1 : -1) };
+        }
 
         // Transposition Table Check
-        const boardKey = this.getBoardHash();
+        const boardKey = `${depth}:${isMax ? 1 : 0}:${this.getBoardHash()}`;
         const cached = this.transpositionTable.get(boardKey);
         if (cached && cached.depth >= depth) return cached;
 
@@ -140,7 +147,7 @@ class AI {
 
         // Move Ordering (for Hard/Expert)
         if (this.level === 'hard' || this.level === 'expert') {
-            moves = this.orderMoves(moves, turn);
+            moves = this.orderMoves(moves).slice(0, this.getMoveLimit(depth));
         }
 
         let bestMove = null;
@@ -268,28 +275,21 @@ class AI {
 
     // --- UTILS ---
 
-    orderMoves(moves, turn) {
-        const opponent = turn === SENTE ? GOTE : SENTE;
+    orderMoves(moves) {
         return moves.map(m => {
             let weight = 0;
-            // 1. Check moves (Priority 1)
-            this.game.pushMove(m);
-            if (this.game.isInCheck(opponent)) weight += 10000;
-            this.game.popMove();
-
-            // 2. Captures (Priority 2)
+            // 1. Captures and promotion
             if (!m.drop) {
                 const target = this.game.board[m.to.x][m.to.y];
                 if (target) {
                     weight += 5000 + (this.VALUES[target.type] - (this.VALUES[this.game.board[m.from.x][m.from.y]?.type] || 0) / 100);
                 }
-                // 3. Promotion (Priority 3)
                 if (m.promote) weight += 2000;
             } else {
-                weight += 500;
+                weight += 250;
             }
 
-            // 4. High value piece movement (Priority 4)
+            // 2. High value piece movement
             if (!m.drop) {
                 const piece = this.game.board[m.from.x][m.from.y];
                 if (piece) weight += this.VALUES[piece.type] / 10;
@@ -299,6 +299,22 @@ class AI {
         })
             .sort((a, b) => b.weight - a.weight)
             .map(x => x.m);
+    }
+
+    getTimeBudget() {
+        if (this.level === 'hard') return 650;
+        if (this.level === 'expert') return 1100;
+        return 0;
+    }
+
+    getMoveLimit(depth) {
+        if (this.level === 'expert') return depth >= 3 ? 26 : 34;
+        if (this.level === 'hard') return depth >= 2 ? 22 : 30;
+        return 40;
+    }
+
+    isTimeUp() {
+        return this.searchDeadline > 0 && Date.now() >= this.searchDeadline;
     }
 
     getKingPositions() {

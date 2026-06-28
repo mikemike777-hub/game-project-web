@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const screens = {
         start: document.getElementById('start-screen'),
         difficulty: document.getElementById('difficulty-screen'),
+        side: document.getElementById('side-screen'),
         matching: document.getElementById('matching-screen'),
         game: document.getElementById('game-screen')
     };
@@ -20,13 +21,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners
     let isOnline = false;
     let myPlayerId = 0; // 0: Sente, 1: Gote
+    let aiPlayerId = GOTE;
+    let selectedComLevel = 'easy';
     let isProcessing = false; // Guard for async move processing
     let lastSentMoveIndex = -1; // To prevent echo loops
+
+    function startComputerGame(level, playerSide) {
+        isOnline = false;
+        game.init();
+        ui.resetTransientEffects();
+        ai = new AI(game, level);
+        myPlayerId = playerSide;
+        aiPlayerId = playerSide === SENTE ? GOTE : SENTE;
+        ui.localPlayer = playerSide;
+        isProcessing = false;
+        lastSentMoveIndex = -1;
+        document.getElementById('shogi-board').style.transform = 'none';
+        showScreen('game');
+        ui.render();
+        ui.showRoleDialog(playerSide, () => {
+            if (!game.isGameOver && game.turn === aiPlayerId) {
+                document.dispatchEvent(new CustomEvent('game-move'));
+            }
+        });
+    }
+
+    function winnerOf(player) {
+        return player === SENTE ? GOTE : SENTE;
+    }
 
     // Event Listeners
     document.getElementById('btn-com').addEventListener('click', () => {
         isOnline = false;
         ai = null; // Reset
+        ui.resetTransientEffects();
         showScreen('difficulty');
     });
 
@@ -42,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`Online game start. I am Player ${playerIndex}`);
                 myPlayerId = playerIndex;
                 game.init();
-                ui.resetCastleTriggers();
+                ui.resetTransientEffects();
                 game.turn = SENTE;
 
                 isProcessing = false;
@@ -106,19 +134,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.diff-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const level = e.target.dataset.level;
-            game.init();
-            ui.resetCastleTriggers();
-            ai = new AI(game, level);
-            myPlayerId = SENTE; // Player is always Sente vs COM
-            ui.localPlayer = SENTE;
-            isProcessing = false;
-            lastSentMoveIndex = -1;
-            document.getElementById('shogi-board').style.transform = 'none';
-            showScreen('game');
-            ui.render();
-            // Show role announcement
-            ui.showRoleDialog(SENTE, null);
+            selectedComLevel = e.target.dataset.level;
+            showScreen('side');
+        });
+    });
+
+    document.querySelectorAll('.side-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const side = e.target.dataset.side;
+            const playerSide = side === 'random'
+                ? (Math.random() < 0.5 ? SENTE : GOTE)
+                : (side === 'gote' ? GOTE : SENTE);
+            startComputerGame(selectedComLevel, playerSide);
         });
     });
 
@@ -153,40 +180,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // COM: If it's now GOTE and we act as AI
-        if (!isOnline && !game.isGameOver && game.turn === GOTE && ai) {
-            // Check if COM has any legal moves (checkmate detection)
-            const comMoves = game.getLegalMoves(GOTE);
-            if (comMoves.length === 0) {
-                // COM is in checkmate - surrender
-                game.isGameOver = true;
-                game.winner = SENTE;
-                ui.render();
-                // Show surrender dialog
-                setTimeout(() => {
-                    ui.showSurrenderDialog();
-                }, 300);
-                return;
-            }
+        if (!isOnline && !game.isGameOver && game.turn === aiPlayerId && ai) {
+            if (isProcessing) return;
+            isProcessing = true;
 
-            await ai.makeMove();
-            // Centralized sound/narration/render logic
-            await ui.onMoveMade();
-
-            // After COM moves, check if player is in checkmate
-            if (!game.isGameOver) {
-                const playerMoves = game.getLegalMoves(SENTE);
-                if (playerMoves.length === 0) {
+            try {
+                const aiMoves = game.getLegalMoves(aiPlayerId);
+                if (aiMoves.length === 0) {
                     game.isGameOver = true;
-                    game.winner = GOTE;
+                    game.winner = myPlayerId;
                     ui.render();
+                    setTimeout(() => {
+                        ui.showSurrenderDialog();
+                    }, 300);
+                    return;
                 }
+
+                await ai.makeMove();
+                await ui.onMoveMade();
+
+                if (!game.isGameOver) {
+                    const playerMoves = game.getLegalMoves(myPlayerId);
+                    if (playerMoves.length === 0) {
+                        game.isGameOver = true;
+                        game.winner = aiPlayerId;
+                        ui.render();
+                    }
+                }
+            } finally {
+                isProcessing = false;
             }
         }
     });
 
     document.getElementById('btn-back-diff').addEventListener('click', () => {
         showScreen('start');
+    });
+
+    document.getElementById('btn-back-side').addEventListener('click', () => {
+        showScreen('difficulty');
     });
 
     document.getElementById('btn-cancel-matching').addEventListener('click', () => {
@@ -196,7 +228,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-resign').addEventListener('click', () => {
         if (confirm('投了しますか？')) {
-            alert('負けました...');
+            game.isGameOver = true;
+            game.winner = winnerOf(myPlayerId);
+            ai = null;
+            ui.resetTransientEffects();
+            game.init();
+            ui.render();
             showScreen('start');
         }
     });

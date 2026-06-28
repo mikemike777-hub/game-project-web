@@ -409,7 +409,10 @@ body {
     transform: translate(-50%, -50%) scale(0.72);
     padding: 0.15em 0.45em;
     color: #e8fbff;
-    font-size: clamp(2.1rem, 9vmin, 5.5rem);
+    max-width: calc(100vw - 16px);
+    white-space: nowrap;
+    text-align: center;
+    font-size: clamp(1.8rem, 8vmin, 5.5rem);
     font-weight: 900;
     line-height: 1;
     text-shadow:

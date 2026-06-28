@@ -120,9 +120,12 @@ class UI {
         const btn = document.getElementById('btn-return-title');
         if (btn) {
             btn.addEventListener('click', () => {
+                this.game.init();
+                this.resetTransientEffects();
                 document.getElementById('result-dialog').classList.add('hidden');
                 document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                 document.getElementById('start-screen').classList.add('active');
+                this.render();
             });
         }
     }
@@ -158,6 +161,35 @@ class UI {
             clearTimeout(this.castleFrameTimer);
             this.castleFrameTimer = null;
         }
+
+        const banner = document.getElementById('castle-banner');
+        if (banner) {
+            banner.classList.remove('show');
+            banner.textContent = '';
+        }
+    }
+
+    resetTransientEffects() {
+        this.selectedCell = null;
+        this.currentLegalMoves = [];
+        this.lastCheckKey = null;
+        this.pendingCheckAnnouncement = null;
+        this.lastFoulKey = null;
+        this.resetCastleTriggers();
+
+        ['check-banner', 'castle-banner'].forEach(id => {
+            const banner = document.getElementById(id);
+            if (banner) banner.classList.remove('show');
+        });
+
+        ['promote-dialog', 'role-dialog', 'result-dialog'].forEach(id => {
+            const dialog = document.getElementById(id);
+            if (dialog) dialog.classList.add('hidden');
+        });
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     coordsToSquare(x, y) {
@@ -194,19 +226,19 @@ class UI {
         return map[type] || null;
     }
 
-    checkCastlePatternsForBoth() {
+    async checkCastlePatternsForBoth() {
         if (this.game.isGameOver) return;
-        this.checkCastlePatterns(SENTE);
-        this.checkCastlePatterns(GOTE);
+        await this.checkCastlePatterns(SENTE);
+        await this.checkCastlePatterns(GOTE);
     }
 
-    checkCastlePatterns(owner) {
+    async checkCastlePatterns(owner) {
         for (const pattern of WIKI_CASTLE_PATTERNS) {
             if (this.castleTriggered[owner].has(pattern.id)) continue;
             if (!this.isExactCastleMatch(pattern, owner)) continue;
 
             this.castleTriggered[owner].add(pattern.id);
-            this.triggerCastleEffect(pattern, owner);
+            await this.triggerCastleEffect(pattern, owner);
         }
     }
 
@@ -222,20 +254,24 @@ class UI {
         });
     }
 
-    triggerCastleEffect(pattern, owner) {
+    async triggerCastleEffect(pattern, owner) {
         const squares = pattern.highlightSquares.map(square => this.normalizeCastleSquare(square, owner));
         this.activeCastleSquares = new Set(squares);
 
         this.showCastleBanner(pattern.message);
-        this.playCastleVoice(pattern);
         this.render();
 
         if (this.castleFrameTimer) clearTimeout(this.castleFrameTimer);
+        await Promise.race([
+            Promise.all([this.playCastleVoice(pattern), this.delay(900)]),
+            this.delay(2800)
+        ]);
+
         this.castleFrameTimer = setTimeout(() => {
             this.activeCastleSquares.clear();
             this.castleFrameTimer = null;
             this.render();
-        }, 1800);
+        }, 160);
     }
 
     showCastleBanner(text) {
@@ -257,16 +293,36 @@ class UI {
     }
 
     playCastleVoice(pattern) {
-        try {
-            const audio = new Audio(pattern.voice);
-            audio.volume = 0.9;
-            const playPromise = audio.play();
-            if (playPromise?.catch) {
-                playPromise.catch(() => this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1400 }));
+        return new Promise(resolve => {
+            let resolved = false;
+            let fallbackStarted = false;
+
+            const finish = () => {
+                if (resolved) return;
+                resolved = true;
+                resolve();
+            };
+
+            const fallback = () => {
+                if (fallbackStarted) return;
+                fallbackStarted = true;
+                this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1800 }).then(finish);
+            };
+
+            try {
+                const audio = new Audio(pattern.voice);
+                audio.volume = 0.9;
+                audio.onended = finish;
+                audio.onerror = fallback;
+
+                const playPromise = audio.play();
+                if (playPromise?.catch) playPromise.catch(fallback);
+
+                setTimeout(finish, 2400);
+            } catch {
+                fallback();
             }
-        } catch {
-            this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1400 });
-        }
+        });
     }
 
     render() {
@@ -649,7 +705,7 @@ class UI {
             await new Promise(r => setTimeout(r, 120));
             await this.narrateMove(lastMove, movedPlayer);
             await this.announcePendingCheck();
-            this.checkCastlePatternsForBoth();
+            await this.checkCastlePatternsForBoth();
         }
         document.dispatchEvent(new CustomEvent('game-move'));
     }
