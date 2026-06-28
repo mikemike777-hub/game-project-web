@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`Online game start. I am Player ${playerIndex}`);
                 myPlayerId = playerIndex;
                 game.init();
+                ui.resetCastleTriggers();
                 game.turn = SENTE;
 
                 isProcessing = false;
@@ -107,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', (e) => {
             const level = e.target.dataset.level;
             game.init();
+            ui.resetCastleTriggers();
             ai = new AI(game, level);
             myPlayerId = SENTE; // Player is always Sente vs COM
             ui.localPlayer = SENTE;

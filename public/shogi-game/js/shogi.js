@@ -226,8 +226,13 @@ class Shogi {
         return newBoard;
     }
 
+    getOpponent(player) {
+        return player === SENTE ? GOTE : SENTE;
+    }
+
     getPseudoMoves(player, options = {}) {
         const includeIllegalDrops = Boolean(options.includeIllegalDrops);
+        const skipPawnDropMate = Boolean(options.skipPawnDropMate);
         const pseudoMoves = [];
 
         // Board moves
@@ -243,7 +248,7 @@ class Shogi {
         for (const type of uniqueTypes) {
             for (let x = 0; x < 9; x++) {
                 for (let y = 0; y < 9; y++) {
-                    if (this.board[x][y] === null && (includeIllegalDrops || this.canDrop(x, y, type, player))) {
+                    if (this.board[x][y] === null && (includeIllegalDrops || this.canDrop(x, y, type, player, { skipPawnDropMate }))) {
                         pseudoMoves.push({ from: null, to: { x, y }, type, player, drop: true });
                     }
                 }
@@ -282,11 +287,11 @@ class Shogi {
         return false;
     }
 
-    canDrop(x, y, type, player) {
-        return this.getDropViolation(x, y, type, player) === null;
+    canDrop(x, y, type, player, options = {}) {
+        return this.getDropViolation(x, y, type, player, options) === null;
     }
 
-    getDropViolation(x, y, type, player) {
+    getDropViolation(x, y, type, player, options = {}) {
         if (this.board[x][y] !== null) {
             return {
                 code: 'occupied',
@@ -318,6 +323,13 @@ class Shogi {
                 reason: '歩を九段目には打てません。',
                 square: this.formatSquare(x, y)
             };
+            if (!options.skipPawnDropMate && this.isPawnDropMate(x, y, player)) {
+                return {
+                    code: 'uchifuzume',
+                    reason: `打ち歩詰めです。${this.formatSquare(x, y)}への歩打ちで相手玉が即詰みになります。`,
+                    square: this.formatSquare(x, y)
+                };
+            }
         }
         if (type === PIECES.KY) {
             if (player === SENTE && y === 0) return {
@@ -344,6 +356,36 @@ class Shogi {
             };
         }
         return null;
+    }
+
+    isPawnDropMate(x, y, player) {
+        const opponent = this.getOpponent(player);
+        const previous = this.board[x][y];
+        this.board[x][y] = { type: PIECES.FU, player };
+
+        try {
+            if (!this.isInCheck(opponent)) return false;
+            return !this.hasRuleLegalEscape(opponent);
+        } finally {
+            this.board[x][y] = previous;
+        }
+    }
+
+    hasRuleLegalEscape(player) {
+        const moves = this.getPseudoMoves(player, {
+            includeIllegalDrops: false,
+            skipPawnDropMate: true
+        });
+
+        return moves.some(move => {
+            if (!move.drop) {
+                const target = this.board[move.to.x][move.to.y];
+                if (target && target.type === PIECES.OU) return false;
+            }
+
+            const nextBoard = this.applyMoveToBoard(this.board, move);
+            return !this.isInCheck(player, nextBoard);
+        });
     }
 
     formatSquare(x, y) {

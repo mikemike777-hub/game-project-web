@@ -1,3 +1,87 @@
+const WIKI_CASTLE_PATTERNS = [
+    {
+        id: 'ahiru',
+        name: 'アヒル囲い',
+        message: 'アヒル囲い！',
+        voice: 'audio/ahiru.mp3',
+        source: 'Wikipedia: アヒル囲い',
+        squares: [['58', 'K'], ['68', 'S'], ['48', 'S'], ['79', 'G'], ['39', 'G'], ['26', 'R'], ['97', 'B']],
+        highlightSquares: ['58', '68', '48', '79', '39', '26', '97']
+    },
+    {
+        id: 'mino',
+        name: '美濃囲い',
+        message: '美濃囲い！',
+        voice: 'audio/mino.mp3',
+        source: 'Wikipedia: 美濃囲い',
+        squares: [['28', 'K'], ['38', 'S'], ['58', 'G'], ['49', 'G']],
+        highlightSquares: ['28', '38', '58', '49']
+    },
+    {
+        id: 'yagura',
+        name: '矢倉囲い',
+        message: '矢倉囲い！',
+        voice: 'audio/yagura.mp3',
+        source: 'Wikipedia: 矢倉囲い',
+        squares: [['88', 'K'], ['78', 'G'], ['67', 'G'], ['77', 'S']],
+        highlightSquares: ['88', '78', '67', '77']
+    },
+    {
+        id: 'kani',
+        name: 'カニ囲い',
+        message: 'カニ囲い！',
+        voice: 'audio/kani.mp3',
+        source: 'Wikipedia: カニ囲い',
+        squares: [['69', 'K'], ['78', 'G'], ['68', 'S'], ['58', 'G']],
+        highlightSquares: ['69', '78', '68', '58']
+    },
+    {
+        id: 'funa',
+        name: '舟囲い',
+        message: '舟囲い！',
+        voice: 'audio/funa.mp3',
+        source: 'Wikipedia: 舟囲い',
+        squares: [['88', 'B'], ['78', 'K'], ['79', 'S'], ['69', 'G'], ['58', 'G'], ['48', 'S']],
+        highlightSquares: ['88', '78', '79', '69', '58', '48']
+    },
+    {
+        id: 'anaguma_basic',
+        name: '穴熊囲い',
+        message: '穴熊囲い！',
+        voice: 'audio/anaguma.mp3',
+        source: 'Wikipedia: 穴熊囲い',
+        squares: [['19', 'K'], ['18', 'L'], ['28', 'S'], ['38', 'G'], ['39', 'G'], ['29', 'N']],
+        highlightSquares: ['19', '18', '28', '38', '39', '29']
+    },
+    {
+        id: 'ibisha_anaguma',
+        name: '居飛車穴熊',
+        message: '居飛車穴熊！',
+        voice: 'audio/ibisha_anaguma.mp3',
+        source: 'Wikipedia: 居飛車穴熊',
+        squares: [['99', 'K'], ['98', 'L'], ['88', 'S'], ['79', 'G'], ['78', 'G'], ['89', 'N']],
+        highlightSquares: ['99', '98', '88', '79', '78', '89']
+    },
+    {
+        id: 'gangi_old',
+        name: '雁木囲い',
+        message: '雁木囲い！',
+        voice: 'audio/gangi.mp3',
+        source: 'Wikipedia: 雁木囲い / 相居飛車二枚銀雁木',
+        squares: [['69', 'K'], ['78', 'G'], ['58', 'G'], ['67', 'S'], ['57', 'S']],
+        highlightSquares: ['69', '78', '58', '67', '57']
+    },
+    {
+        id: 'tsunogin_gangi',
+        name: 'ツノ銀雁木',
+        message: 'ツノ銀雁木！',
+        voice: 'audio/tsunogin_gangi.mp3',
+        source: 'Wikipedia: 雁木囲い / 相居飛車ツノ銀雁木',
+        squares: [['69', 'K'], ['78', 'G'], ['58', 'G'], ['67', 'S'], ['47', 'S']],
+        highlightSquares: ['69', '78', '58', '67', '47']
+    }
+];
+
 class UI {
     constructor(game) {
         this.game = game;
@@ -10,6 +94,9 @@ class UI {
         this.lastCheckKey = null;
         this.pendingCheckAnnouncement = null;
         this.lastFoulKey = null;
+        this.castleTriggered = { [SENTE]: new Set(), [GOTE]: new Set() };
+        this.activeCastleSquares = new Set();
+        this.castleFrameTimer = null;
 
         this.initBoard();
         this.initResultDialog();
@@ -61,6 +148,125 @@ class UI {
             dialog.classList.add('hidden');
             if (onClose) onClose();
         });
+    }
+
+    resetCastleTriggers() {
+        this.castleTriggered[SENTE].clear();
+        this.castleTriggered[GOTE].clear();
+        this.activeCastleSquares.clear();
+        if (this.castleFrameTimer) {
+            clearTimeout(this.castleFrameTimer);
+            this.castleFrameTimer = null;
+        }
+    }
+
+    coordsToSquare(x, y) {
+        return `${9 - x}${y + 1}`;
+    }
+
+    squareToCoords(square) {
+        const file = Number(square[0]);
+        const rank = Number(square[1]);
+        return { x: 9 - file, y: rank - 1 };
+    }
+
+    flipSquare(square) {
+        const file = Number(square[0]);
+        const rank = Number(square[1]);
+        return `${10 - file}${10 - rank}`;
+    }
+
+    normalizeCastleSquare(square, owner) {
+        return owner === SENTE ? square : this.flipSquare(square);
+    }
+
+    pieceToCastleCode(type) {
+        const map = {
+            [PIECES.FU]: 'P',
+            [PIECES.KY]: 'L',
+            [PIECES.KE]: 'N',
+            [PIECES.GI]: 'S',
+            [PIECES.KI]: 'G',
+            [PIECES.KA]: 'B',
+            [PIECES.HI]: 'R',
+            [PIECES.OU]: 'K'
+        };
+        return map[type] || null;
+    }
+
+    checkCastlePatternsForBoth() {
+        if (this.game.isGameOver) return;
+        this.checkCastlePatterns(SENTE);
+        this.checkCastlePatterns(GOTE);
+    }
+
+    checkCastlePatterns(owner) {
+        for (const pattern of WIKI_CASTLE_PATTERNS) {
+            if (this.castleTriggered[owner].has(pattern.id)) continue;
+            if (!this.isExactCastleMatch(pattern, owner)) continue;
+
+            this.castleTriggered[owner].add(pattern.id);
+            this.triggerCastleEffect(pattern, owner);
+        }
+    }
+
+    isExactCastleMatch(pattern, owner) {
+        return pattern.squares.every(([baseSquare, requiredPiece]) => {
+            const square = this.normalizeCastleSquare(baseSquare, owner);
+            const { x, y } = this.squareToCoords(square);
+            const actual = this.game.board[x]?.[y];
+
+            if (!actual) return false;
+            if (actual.player !== owner) return false;
+            return this.pieceToCastleCode(actual.type) === requiredPiece;
+        });
+    }
+
+    triggerCastleEffect(pattern, owner) {
+        const squares = pattern.highlightSquares.map(square => this.normalizeCastleSquare(square, owner));
+        this.activeCastleSquares = new Set(squares);
+
+        this.showCastleBanner(pattern.message);
+        this.playCastleVoice(pattern);
+        this.render();
+
+        if (this.castleFrameTimer) clearTimeout(this.castleFrameTimer);
+        this.castleFrameTimer = setTimeout(() => {
+            this.activeCastleSquares.clear();
+            this.castleFrameTimer = null;
+            this.render();
+        }, 1800);
+    }
+
+    showCastleBanner(text) {
+        const screen = document.getElementById('game-screen');
+        if (!screen) return;
+
+        let banner = document.getElementById('castle-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'castle-banner';
+            banner.className = 'castle-banner';
+            screen.appendChild(banner);
+        }
+
+        banner.textContent = text;
+        banner.classList.remove('show');
+        void banner.offsetWidth;
+        banner.classList.add('show');
+    }
+
+    playCastleVoice(pattern) {
+        try {
+            const audio = new Audio(pattern.voice);
+            audio.volume = 0.9;
+            const playPromise = audio.play();
+            if (playPromise?.catch) {
+                playPromise.catch(() => this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1400 }));
+            }
+        } catch {
+            this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1400 });
+        }
     }
 
     render() {
@@ -151,6 +357,10 @@ class UI {
 
                 if (this.game.foul?.existingPawn && this.game.foul.existingPawn.x === x && this.game.foul.existingPawn.y === y) {
                     cell.classList.add('foul-reference');
+                }
+
+                if (this.activeCastleSquares.has(this.coordsToSquare(x, y))) {
+                    cell.classList.add('castle-frame');
                 }
             }
         }
@@ -439,6 +649,7 @@ class UI {
             await new Promise(r => setTimeout(r, 120));
             await this.narrateMove(lastMove, movedPlayer);
             await this.announcePendingCheck();
+            this.checkCastlePatternsForBoth();
         }
         document.dispatchEvent(new CustomEvent('game-move'));
     }
