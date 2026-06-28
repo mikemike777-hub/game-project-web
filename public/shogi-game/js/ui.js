@@ -3,7 +3,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'ahiru',
         name: 'アヒル囲い',
         message: 'アヒル囲い！',
-        voice: 'audio/ahiru.mp3',
         source: 'Wikipedia: アヒル囲い',
         squares: [['58', 'K'], ['68', 'S'], ['48', 'S'], ['79', 'G'], ['39', 'G'], ['26', 'R'], ['97', 'B']],
         highlightSquares: ['58', '68', '48', '79', '39', '26', '97']
@@ -12,7 +11,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'mino',
         name: '美濃囲い',
         message: '美濃囲い！',
-        voice: 'audio/mino.mp3',
         source: 'Wikipedia: 美濃囲い',
         squares: [['28', 'K'], ['38', 'S'], ['58', 'G'], ['49', 'G']],
         highlightSquares: ['28', '38', '58', '49']
@@ -21,7 +19,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'yagura',
         name: '矢倉囲い',
         message: '矢倉囲い！',
-        voice: 'audio/yagura.mp3',
         source: 'Wikipedia: 矢倉囲い',
         squares: [['88', 'K'], ['78', 'G'], ['67', 'G'], ['77', 'S']],
         highlightSquares: ['88', '78', '67', '77']
@@ -30,7 +27,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'kani',
         name: 'カニ囲い',
         message: 'カニ囲い！',
-        voice: 'audio/kani.mp3',
         source: 'Wikipedia: カニ囲い',
         squares: [['69', 'K'], ['78', 'G'], ['68', 'S'], ['58', 'G']],
         highlightSquares: ['69', '78', '68', '58']
@@ -39,7 +35,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'funa',
         name: '舟囲い',
         message: '舟囲い！',
-        voice: 'audio/funa.mp3',
         source: 'Wikipedia: 舟囲い',
         squares: [['88', 'B'], ['78', 'K'], ['79', 'S'], ['69', 'G'], ['58', 'G'], ['48', 'S']],
         highlightSquares: ['88', '78', '79', '69', '58', '48']
@@ -48,7 +43,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'anaguma_basic',
         name: '穴熊囲い',
         message: '穴熊囲い！',
-        voice: 'audio/anaguma.mp3',
         source: 'Wikipedia: 穴熊囲い',
         squares: [['19', 'K'], ['18', 'L'], ['28', 'S'], ['38', 'G'], ['39', 'G'], ['29', 'N']],
         highlightSquares: ['19', '18', '28', '38', '39', '29']
@@ -57,7 +51,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'ibisha_anaguma',
         name: '居飛車穴熊',
         message: '居飛車穴熊！',
-        voice: 'audio/ibisha_anaguma.mp3',
         source: 'Wikipedia: 居飛車穴熊',
         squares: [['99', 'K'], ['98', 'L'], ['88', 'S'], ['79', 'G'], ['78', 'G'], ['89', 'N']],
         highlightSquares: ['99', '98', '88', '79', '78', '89']
@@ -66,7 +59,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'gangi_old',
         name: '雁木囲い',
         message: '雁木囲い！',
-        voice: 'audio/gangi.mp3',
         source: 'Wikipedia: 雁木囲い / 相居飛車二枚銀雁木',
         squares: [['69', 'K'], ['78', 'G'], ['58', 'G'], ['67', 'S'], ['57', 'S']],
         highlightSquares: ['69', '78', '58', '67', '57']
@@ -75,7 +67,6 @@ const WIKI_CASTLE_PATTERNS = [
         id: 'tsunogin_gangi',
         name: 'ツノ銀雁木',
         message: 'ツノ銀雁木！',
-        voice: 'audio/tsunogin_gangi.mp3',
         source: 'Wikipedia: 雁木囲い / 相居飛車ツノ銀雁木',
         squares: [['69', 'K'], ['78', 'G'], ['58', 'G'], ['67', 'S'], ['47', 'S']],
         highlightSquares: ['69', '78', '58', '67', '47']
@@ -293,36 +284,7 @@ class UI {
     }
 
     playCastleVoice(pattern) {
-        return new Promise(resolve => {
-            let resolved = false;
-            let fallbackStarted = false;
-
-            const finish = () => {
-                if (resolved) return;
-                resolved = true;
-                resolve();
-            };
-
-            const fallback = () => {
-                if (fallbackStarted) return;
-                fallbackStarted = true;
-                this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1800 }).then(finish);
-            };
-
-            try {
-                const audio = new Audio(pattern.voice);
-                audio.volume = 0.9;
-                audio.onended = finish;
-                audio.onerror = fallback;
-
-                const playPromise = audio.play();
-                if (playPromise?.catch) playPromise.catch(fallback);
-
-                setTimeout(finish, 2400);
-            } catch {
-                fallback();
-            }
-        });
+        return this.speakText(pattern.message, { rate: 0.92, pitch: 1.08, timeoutMs: 1800 });
     }
 
     render() {
@@ -809,7 +771,6 @@ class UI {
             if (jaVoice) utterance.voice = jaVoice;
 
             const timeout = setTimeout(() => {
-                console.warn('Speech synthesis timeout');
                 resolve();
             }, options.timeoutMs ?? 1500);
 

@@ -58,7 +58,9 @@ class AI {
             const delay = Math.max(0, 180 - elapsed);
 
             setTimeout(() => {
-                console.log(`AI [${this.level}] Nodes: ${this.nodesVisited}, Time: ${elapsed}ms`);
+                if (typeof window !== 'undefined' && window.DEBUG_AI) {
+                    console.log(`AI [${this.level}] Nodes: ${this.nodesVisited}, Time: ${elapsed}ms`);
+                }
                 if (bestMove.drop) {
                     this.game.drop(bestMove.to.x, bestMove.to.y, bestMove.type);
                 } else {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#dcb35c"/>
+  <path d="M19 11h26l8 42H11l8-42z" fill="#f0dcae" stroke="#3e2610" stroke-width="4" stroke-linejoin="round"/>
+  <text x="32" y="40" text-anchor="middle" font-size="24" font-family="serif" font-weight="700" fill="#1a1a1a">王</text>
+</svg>
