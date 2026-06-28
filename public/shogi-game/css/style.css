@@ -21,7 +21,9 @@ html,
 body {
     width: 100%;
     height: 100%;
+    min-height: 100%;
     overflow: hidden;
+    overscroll-behavior: none;
 }
 
 body {
@@ -29,15 +31,18 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    min-height: 100dvh;
+    touch-action: manipulation;
 }
 
 #app {
     width: 100%;
-    height: 100%;
+    height: 100dvh;
     max-width: 900px;
     background-color: var(--menu-bg);
     position: relative;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
 }
 
 /* Screens */
@@ -97,8 +102,10 @@ body {
 #game-screen {
     display: none;
     flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
     overflow: hidden;
-    padding: 4px;
+    padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
     gap: 4px;
 }
 
@@ -225,6 +232,7 @@ body {
 /* ===== BOARD WRAPPER ===== */
 .board-wrapper {
     flex: 1 1 auto;
+    width: 100%;
     min-height: 0;
     display: flex;
     justify-content: center;
@@ -235,8 +243,8 @@ body {
 /* Board: square, fills available space */
 .board {
     /* Use the smaller of width/height to stay square */
-    width: min(100%, calc(100vh - 200px));
-    height: min(100%, calc(100vh - 200px));
+    width: min(100%, calc(100dvh - 200px));
+    height: min(100%, calc(100dvh - 200px));
     aspect-ratio: 1 / 1;
     background-color: var(--wood-dark);
     border: 3px solid #3e2610;
@@ -310,6 +318,7 @@ body {
 
 /* Controls */
 .control-btn {
+    min-height: 34px;
     padding: 0.35rem 0.7rem;
     background-color: #d1d1d1;
     border: 1px solid #999;
@@ -383,16 +392,44 @@ body {
 @media (max-width: 600px) {
     #app {
         max-width: 100%;
+        box-shadow: none;
     }
 
     #game-screen {
-        padding: 5px;
+        padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+        gap: 3px;
+    }
+
+    .game-status-bar {
+        min-height: 40px;
+        padding: 3px 6px;
+    }
+
+    #game-status {
+        font-size: 0.85rem;
+    }
+
+    .control-btn {
+        min-height: 34px;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    .hand-bar {
+        min-height: 48px;
+        padding: 2px 4px;
+    }
+
+    .hand-piece-wrapper {
+        width: 42px;
+        height: 42px;
     }
 
     .board {
         /* Ensure it fits horizontally with a small margin */
-        width: min(calc(100vw - 16px), calc(100vh - 200px));
-        height: min(calc(100vw - 16px), calc(100vh - 200px));
+        width: min(calc(100vw - 10px), calc(100dvh - 150px));
+        height: min(calc(100vw - 10px), calc(100dvh - 150px));
+        border-width: 2px;
     }
 
     .piece {
@@ -404,6 +441,31 @@ body {
     }
 
     .hand-bar-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-height: 500px) {
+    #game-screen {
+        gap: 2px;
+    }
+
+    .game-status-bar {
+        min-height: 34px;
+        padding: 2px 6px;
+    }
+
+    .hand-bar {
+        min-height: 38px;
+    }
+
+    .hand-piece-wrapper {
+        width: 34px;
+        height: 34px;
+    }
+
+    .board {
+        width: min(calc(100vw - 10px), calc(100dvh - 136px));
+        height: min(calc(100vw - 10px), calc(100dvh - 136px));
     }
 }
