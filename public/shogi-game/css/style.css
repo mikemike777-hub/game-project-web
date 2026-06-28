@@ -290,6 +290,15 @@ body {
     color: #cc0000;
 }
 
+.piece.king-in-check {
+    color: #b40000;
+    background-color: #ffe5d8;
+    box-shadow:
+        inset 0 0 5px rgba(0, 0, 0, 0.25),
+        0 0 18px rgba(220, 0, 0, 0.9);
+    animation: king-danger 0.58s infinite alternate;
+}
+
 .cell.selected {
     background-color: var(--selected);
 }
@@ -298,12 +307,55 @@ body {
     background-color: var(--highlight);
 }
 
+.cell.illegal-drop {
+    background:
+        repeating-linear-gradient(135deg, rgba(200, 0, 0, 0.18) 0 6px, rgba(255, 255, 255, 0.08) 6px 12px),
+        rgba(255, 215, 0, 0.22);
+}
+
 .cell.last-move {
     background-color: var(--last-move);
 }
 
 .cell.in-check {
-    background-color: var(--check);
+    background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.45) 0 14%, transparent 15%),
+        var(--check);
+    animation: check-cell-flash 0.65s infinite alternate;
+}
+
+.cell.drop-impact::before,
+.cell.foul-drop::before {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    border: 3px solid rgba(255, 240, 120, 0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: drop-ring 0.72s ease-out both;
+    z-index: 2;
+}
+
+.cell.drop-impact::after,
+.cell.foul-drop::after {
+    content: '';
+    position: absolute;
+    inset: 18%;
+    background:
+        linear-gradient(90deg, transparent 42%, rgba(255, 250, 190, 0.9) 43% 57%, transparent 58%),
+        linear-gradient(0deg, transparent 42%, rgba(255, 250, 190, 0.9) 43% 57%, transparent 58%);
+    pointer-events: none;
+    animation: drop-spark 0.5s ease-out both;
+    z-index: 2;
+}
+
+.cell.foul-drop {
+    background-color: rgba(190, 0, 0, 0.55);
+}
+
+.cell.foul-reference {
+    outline: 3px solid rgba(180, 0, 0, 0.95);
+    outline-offset: -5px;
 }
 
 .cell.highlight::after {
@@ -314,6 +366,29 @@ body {
     border-radius: 50%;
     background: rgba(200, 160, 0, 0.5);
     pointer-events: none;
+}
+
+.check-banner {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    z-index: 50;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0.7);
+    padding: 0.2em 0.5em;
+    color: #fff2cc;
+    font-size: clamp(2.8rem, 12vmin, 7rem);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow:
+        0 4px 0 #5c1208,
+        0 0 20px rgba(255, 40, 0, 0.95),
+        0 0 42px rgba(255, 210, 80, 0.9);
+    opacity: 0;
+}
+
+.check-banner.show {
+    animation: check-banner-pop 1.25s ease-out both;
 }
 
 /* Controls */
@@ -361,6 +436,7 @@ body {
 .modal-content p {
     margin-bottom: 1rem;
     color: #555;
+    white-space: pre-line;
 }
 
 .modal-buttons {
@@ -467,5 +543,71 @@ body {
     .board {
         width: min(calc(100vw - 10px), calc(100dvh - 136px));
         height: min(calc(100vw - 10px), calc(100dvh - 136px));
+    }
+}
+
+@keyframes king-danger {
+    from {
+        transform: scale(1);
+    }
+
+    to {
+        transform: scale(1.08);
+    }
+}
+
+@keyframes check-cell-flash {
+    from {
+        filter: saturate(1);
+    }
+
+    to {
+        filter: saturate(1.6) brightness(1.12);
+    }
+}
+
+@keyframes drop-ring {
+    from {
+        opacity: 0.95;
+        transform: scale(0.25);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.9);
+    }
+}
+
+@keyframes drop-spark {
+    from {
+        opacity: 0.95;
+        transform: scale(0.3) rotate(0deg);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.45) rotate(45deg);
+    }
+}
+
+@keyframes check-banner-pop {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.55) rotate(-4deg);
+    }
+
+    18% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.08) rotate(2deg);
+    }
+
+    72% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.24) rotate(0deg);
     }
 }

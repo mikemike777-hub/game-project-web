@@ -26,4 +26,24 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: ['public/shogi-game/js/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: {
+        ...globals.browser,
+        AI: 'readonly',
+        GOTE: 'readonly',
+        Network: 'readonly',
+        PIECES: 'readonly',
+        SENTE: 'readonly',
+        Shogi: 'readonly',
+        UI: 'readonly',
+        module: 'readonly',
+      },
+    },
+    rules: {
+      'no-redeclare': 'off',
+    },
+  },
 ])

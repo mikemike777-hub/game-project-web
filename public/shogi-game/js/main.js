@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const moved = await ai.makeMove();
+            await ai.makeMove();
             // Centralized sound/narration/render logic
             await ui.onMoveMade();
 

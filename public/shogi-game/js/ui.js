@@ -7,6 +7,9 @@ class UI {
         this.selectedCell = null;
         this.currentLegalMoves = [];
         this.localPlayer = SENTE; // Default
+        this.lastCheckKey = null;
+        this.pendingCheckAnnouncement = null;
+        this.lastFoulKey = null;
 
         this.initBoard();
         this.initResultDialog();
@@ -77,6 +80,9 @@ class UI {
 
         const senteInCheck = !this.game.isGameOver && this.game.isInCheck(SENTE);
         const goteInCheck = !this.game.isGameOver && this.game.isInCheck(GOTE);
+        const checkedPlayers = [];
+        if (senteInCheck && senteKingPos) checkedPlayers.push({ player: SENTE, pos: senteKingPos });
+        if (goteInCheck && goteKingPos) checkedPlayers.push({ player: GOTE, pos: goteKingPos });
 
         for (let y = 0; y < 9; y++) {
             for (let x = 0; x < 9; x++) {
@@ -100,6 +106,9 @@ class UI {
                     // Local pieces point UP (0deg), Opponent pieces point DOWN (180deg)
                     if (piece.player !== this.localPlayer) pieceEl.classList.add('opponent');
                     if (this.isPromoted(piece.type)) pieceEl.classList.add('promoted');
+                    if (piece.type === PIECES.OU && ((piece.player === SENTE && senteInCheck) || (piece.player === GOTE && goteInCheck))) {
+                        pieceEl.classList.add('king-in-check');
+                    }
                     cell.appendChild(pieceEl);
                 }
 
@@ -114,13 +123,17 @@ class UI {
                 if (lastMove) {
                     if (lastMove.to && lastMove.to.x === x && lastMove.to.y === y) cell.classList.add('last-move');
                     if (lastMove.from && lastMove.from.x === x && lastMove.from.y === y) cell.classList.add('last-move');
+                    if (lastMove.drop && lastMove.to && lastMove.to.x === x && lastMove.to.y === y) {
+                        cell.classList.add(lastMove.violation ? 'foul-drop' : 'drop-impact');
+                    }
                 }
 
                 // Legal Move Highlight
                 if (this.selectedCell) {
                     if (this.selectedCell.isHand) {
-                        if (!piece && this.game.canDrop(x, y, this.selectedCell.type, this.game.turn)) {
-                            cell.classList.add('highlight');
+                        if (!piece) {
+                            const violation = this.game.getDropViolation(x, y, this.selectedCell.type, this.game.turn);
+                            cell.classList.add(violation ? 'illegal-drop' : 'highlight');
                         }
                     } else {
                         const isDest = this.currentLegalMoves.some(m => !m.drop && m.to.x === x && m.to.y === y);
@@ -134,6 +147,10 @@ class UI {
                 }
                 if (goteInCheck && goteKingPos && goteKingPos.x === x && goteKingPos.y === y) {
                     cell.classList.add('in-check');
+                }
+
+                if (this.game.foul?.existingPawn && this.game.foul.existingPawn.x === x && this.game.foul.existingPawn.y === y) {
+                    cell.classList.add('foul-reference');
                 }
             }
         }
@@ -165,17 +182,58 @@ class UI {
         const statusEl = document.getElementById('game-status');
         if (statusEl) {
             if (this.game.isGameOver) {
-                const winnerName = this.game.winner === SENTE ? '先手' : '後手';
-                statusEl.textContent = `${winnerName}の勝ち！`;
-                statusEl.className = '';
-                this.showResultDialog(winnerName);
+                if (this.game.foul) {
+                    const loserName = this.game.foul.player === SENTE ? '先手' : '後手';
+                    statusEl.textContent = `${loserName}の反則負け`;
+                    statusEl.className = 'in-check';
+                    this.showFoulDialog(this.game.foul);
+                } else {
+                    const winnerName = this.game.winner === SENTE ? '先手' : '後手';
+                    statusEl.textContent = `${winnerName}の勝ち！`;
+                    statusEl.className = '';
+                    this.showResultDialog(winnerName);
+                }
             } else {
                 const turnName = this.game.turn === SENTE ? '先手' : '後手';
                 const inCheck = this.game.turn === SENTE ? senteInCheck : goteInCheck;
                 statusEl.textContent = inCheck ? `${turnName}の手番（王手！）` : `${turnName}の手番`;
                 statusEl.className = inCheck ? 'in-check' : '';
+                this.updateCheckEffects(checkedPlayers);
             }
         }
+    }
+
+    updateCheckEffects(checkedPlayers) {
+        const key = checkedPlayers
+            .map(item => `${item.player}:${item.pos.x},${item.pos.y}:${this.game.history.length}`)
+            .join('|');
+
+        if (!key) {
+            this.lastCheckKey = null;
+            return;
+        }
+        if (key === this.lastCheckKey) return;
+
+        this.lastCheckKey = key;
+        this.pendingCheckAnnouncement = checkedPlayers.map(item => item.player);
+        this.showCheckBanner();
+        this.playSound('check');
+    }
+
+    showCheckBanner() {
+        const screen = document.getElementById('game-screen');
+        if (!screen) return;
+        let banner = document.getElementById('check-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'check-banner';
+            banner.className = 'check-banner';
+            banner.textContent = '王手！';
+            screen.appendChild(banner);
+        }
+        banner.classList.remove('show');
+        void banner.offsetWidth;
+        banner.classList.add('show');
     }
 
     showResultDialog(winnerName) {
@@ -191,6 +249,20 @@ class UI {
         if (!dialog) return;
         document.getElementById('result-title').textContent = '参りました';
         document.getElementById('result-message').textContent = 'あなたの勝ちです！おめでとうございます！';
+        dialog.classList.remove('hidden');
+    }
+
+    showFoulDialog(foul) {
+        const dialog = document.getElementById('result-dialog');
+        if (!dialog) return;
+
+        const key = `${foul.player}:${foul.code}:${foul.square}:${this.game.history.length}`;
+        if (!dialog.classList.contains('hidden') && this.lastFoulKey === key) return;
+        this.lastFoulKey = key;
+
+        const loserName = foul.player === SENTE ? '先手' : '後手';
+        document.getElementById('result-title').textContent = `${loserName}の反則負け`;
+        document.getElementById('result-message').textContent = `${foul.reason}\n打った場所：${foul.square}`;
         dialog.classList.remove('hidden');
     }
 
@@ -342,7 +414,7 @@ class UI {
     }
 
     highlightLegalMoves(fx, fy) {
-        const allMoves = this.game.getLegalMoves(this.game.turn);
+        const allMoves = this.game.getPlayableMoves(this.game.turn);
         this.currentLegalMoves = allMoves.filter(m =>
             !m.drop && m.from.x === fx && m.from.y === fy
         );
@@ -352,13 +424,21 @@ class UI {
         this.render();
         const lastMove = this.game.history[this.game.history.length - 1];
         if (lastMove) {
+            if (lastMove.violation) {
+                this.playSound('foul');
+                await this.announceFoul();
+                document.dispatchEvent(new CustomEvent('game-move'));
+                return;
+            }
+
             // The player who just moved is the one BEFORE turn switched
             const movedPlayer = this.game.turn === SENTE ? GOTE : SENTE;
             const hadCapture = lastMove.captured != null;
-            this.playSound(hadCapture ? 'capture' : 'move');
+            this.playSound(lastMove.drop ? 'drop' : (hadCapture ? 'capture' : 'move'));
             // Wait a moment for sound, then narrate and await completion
             await new Promise(r => setTimeout(r, 120));
             await this.narrateMove(lastMove, movedPlayer);
+            await this.announcePendingCheck();
         }
         document.dispatchEvent(new CustomEvent('game-move'));
     }
@@ -394,27 +474,92 @@ class UI {
                 audio.play();
                 return;
             }
+            if (type === 'drop') {
+                const audio = new Audio('assets/spo_ge_syogi_s03.mp3');
+                audio.volume = 0.8;
+                audio.play();
+            }
 
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
+            const playTone = (frequency, duration, gain = 0.12, oscillatorType = 'sine', delay = 0) => {
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                oscillator.type = oscillatorType;
+                oscillator.frequency.setValueAtTime(frequency, ctx.currentTime + delay);
+                gainNode.gain.setValueAtTime(gain, ctx.currentTime + delay);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+                oscillator.start(ctx.currentTime + delay);
+                oscillator.stop(ctx.currentTime + delay + duration);
+            };
 
             if (type === 'select') {
                 // 選択音: 軽いクリック
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(1200, ctx.currentTime);
-                gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-                oscillator.start(ctx.currentTime);
-                oscillator.stop(ctx.currentTime + 0.05);
+                playTone(1200, 0.05, 0.1);
+            } else if (type === 'drop') {
+                playTone(180, 0.09, 0.18, 'triangle');
+                playTone(420, 0.06, 0.08, 'square', 0.04);
+            } else if (type === 'check') {
+                playTone(720, 0.12, 0.16, 'sawtooth');
+                playTone(1080, 0.16, 0.12, 'sawtooth', 0.08);
+            } else if (type === 'foul') {
+                playTone(180, 0.18, 0.16, 'square');
+                playTone(110, 0.24, 0.16, 'square', 0.12);
             }
         } catch (e) {
             // Audio not supported
             console.error('Audio error:', e);
         }
+    }
+
+    announcePendingCheck() {
+        if (!this.pendingCheckAnnouncement || this.pendingCheckAnnouncement.length === 0) {
+            return Promise.resolve();
+        }
+        this.pendingCheckAnnouncement = null;
+        return this.speakText('王手！', { rate: 0.95, pitch: 1.18, timeoutMs: 1000 });
+    }
+
+    announceFoul() {
+        const foul = this.game.foul;
+        if (!foul) return Promise.resolve();
+        return this.speakText(`反則負け。${foul.reason}`, { rate: 0.95, pitch: 0.85, timeoutMs: 1800 });
+    }
+
+    speakText(text, options = {}) {
+        return new Promise((resolve) => {
+            if (!window.speechSynthesis) { resolve(); return; }
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ja-JP';
+            utterance.rate = options.rate ?? 1.0;
+            utterance.pitch = options.pitch ?? 1.0;
+            utterance.volume = options.volume ?? 1.0;
+
+            const voices = window.speechSynthesis.getVoices();
+            const jaVoice = voices.find(v => v.lang.startsWith('ja'));
+            if (jaVoice) utterance.voice = jaVoice;
+
+            const timeout = setTimeout(() => {
+                console.warn('Speech synthesis timeout');
+                resolve();
+            }, options.timeoutMs ?? 1500);
+
+            utterance.onend = () => {
+                clearTimeout(timeout);
+                resolve();
+            };
+            utterance.onerror = () => {
+                clearTimeout(timeout);
+                resolve();
+            };
+
+            window.speechSynthesis.cancel();
+            setTimeout(() => {
+                window.speechSynthesis.speak(utterance);
+            }, 50);
+        });
     }
 
     // ===== MOVE NARRATION =====
@@ -465,38 +610,7 @@ class UI {
                 if (move.promote) moveText += '、なり';
             }
 
-            const text = `${playerName}、${moveText}`;
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ja-JP';
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-
-            // Prefer Japanese voice
-            const voices = window.speechSynthesis.getVoices();
-            const jaVoice = voices.find(v => v.lang.startsWith('ja'));
-            if (jaVoice) utterance.voice = jaVoice;
-
-            // Safety timeout to prevent hanging
-            const timeout = setTimeout(() => {
-                console.warn('Speech synthesis timeout');
-                resolve();
-            }, 1500);
-
-            utterance.onend = () => {
-                clearTimeout(timeout);
-                resolve();
-            };
-            utterance.onerror = () => {
-                clearTimeout(timeout);
-                resolve();
-            };
-
-            window.speechSynthesis.cancel();
-            setTimeout(() => {
-                window.speechSynthesis.speak(utterance);
-            }, 50); // Small delay after cancel
+            this.speakText(`${playerName}、${moveText}`).then(resolve);
         });
     }
 }

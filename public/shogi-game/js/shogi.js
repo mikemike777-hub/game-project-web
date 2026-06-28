@@ -19,6 +19,7 @@ class Shogi {
         this.history = [];
         this.isGameOver = false;
         this.winner = null;
+        this.foul = null;
         this.init();
     }
 
@@ -77,6 +78,7 @@ class Shogi {
         this.history = [];
         this.isGameOver = false;
         this.winner = null;
+        this.foul = null;
     }
 
     createInitialBoard() {
@@ -198,7 +200,6 @@ class Shogi {
             for (let y = 0; y < 9; y++) {
                 const p = board[x][y];
                 if (!p || p.player !== opponent) continue;
-                const moveDef = this.getDirections(p.type, opponent);
                 const attacks = [];
                 // Temporarily use board for attack generation
                 const savedBoard = this.board;
@@ -225,8 +226,8 @@ class Shogi {
         return newBoard;
     }
 
-    // Get all legal moves (filtering out moves that leave king in check)
-    getLegalMoves(player) {
+    getPseudoMoves(player, options = {}) {
+        const includeIllegalDrops = Boolean(options.includeIllegalDrops);
         const pseudoMoves = [];
 
         // Board moves
@@ -242,18 +243,23 @@ class Shogi {
         for (const type of uniqueTypes) {
             for (let x = 0; x < 9; x++) {
                 for (let y = 0; y < 9; y++) {
-                    if (this.board[x][y] === null && this.canDrop(x, y, type, player)) {
+                    if (this.board[x][y] === null && (includeIllegalDrops || this.canDrop(x, y, type, player))) {
                         pseudoMoves.push({ from: null, to: { x, y }, type, player, drop: true });
                     }
                 }
             }
         }
 
-        // Filter moves that leave own king in check
-        return pseudoMoves.filter(m => {
-            const newBoard = this.applyMoveToBoard(this.board, m);
-            return !this.isInCheck(player, newBoard);
-        });
+        return pseudoMoves;
+    }
+
+    // Moves are intentionally not filtered by king safety.
+    getLegalMoves(player) {
+        return this.getPseudoMoves(player, { includeIllegalDrops: false });
+    }
+
+    getPlayableMoves(player) {
+        return this.getPseudoMoves(player, { includeIllegalDrops: true });
     }
 
     isPromotableType(type) {
@@ -277,25 +283,88 @@ class Shogi {
     }
 
     canDrop(x, y, type, player) {
-        if (this.board[x][y] !== null) return false;
+        return this.getDropViolation(x, y, type, player) === null;
+    }
+
+    getDropViolation(x, y, type, player) {
+        if (this.board[x][y] !== null) {
+            return {
+                code: 'occupied',
+                reason: '駒のある場所には打てません。',
+                square: this.formatSquare(x, y)
+            };
+        }
+
         if (type === PIECES.FU) {
             // Nifu check
             for (let row = 0; row < 9; row++) {
                 const p = this.board[x][row];
-                if (p && p.player === player && p.type === PIECES.FU) return false;
+                if (p && p.player === player && p.type === PIECES.FU) {
+                    return {
+                        code: 'nifu',
+                        reason: `二歩です。${this.formatFile(x)}には、すでに${this.formatSquare(x, row)}に歩があります。`,
+                        square: this.formatSquare(x, y),
+                        existingPawn: { x, y: row }
+                    };
+                }
             }
-            if (player === SENTE && y === 0) return false;
-            if (player === GOTE && y === 8) return false;
+            if (player === SENTE && y === 0) return {
+                code: 'dead_drop',
+                reason: '歩を一段目には打てません。',
+                square: this.formatSquare(x, y)
+            };
+            if (player === GOTE && y === 8) return {
+                code: 'dead_drop',
+                reason: '歩を九段目には打てません。',
+                square: this.formatSquare(x, y)
+            };
         }
         if (type === PIECES.KY) {
-            if (player === SENTE && y === 0) return false;
-            if (player === GOTE && y === 8) return false;
+            if (player === SENTE && y === 0) return {
+                code: 'dead_drop',
+                reason: '香車を一段目には打てません。',
+                square: this.formatSquare(x, y)
+            };
+            if (player === GOTE && y === 8) return {
+                code: 'dead_drop',
+                reason: '香車を九段目には打てません。',
+                square: this.formatSquare(x, y)
+            };
         }
         if (type === PIECES.KE) {
-            if (player === SENTE && y <= 1) return false;
-            if (player === GOTE && y >= 7) return false;
+            if (player === SENTE && y <= 1) return {
+                code: 'dead_drop',
+                reason: '桂馬を一段目・二段目には打てません。',
+                square: this.formatSquare(x, y)
+            };
+            if (player === GOTE && y >= 7) return {
+                code: 'dead_drop',
+                reason: '桂馬を八段目・九段目には打てません。',
+                square: this.formatSquare(x, y)
+            };
         }
-        return true;
+        return null;
+    }
+
+    formatSquare(x, y) {
+        const ranks = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+        return `${9 - x}${ranks[y]}`;
+    }
+
+    formatFile(x) {
+        return `${9 - x}筋`;
+    }
+
+    declareFoul(player, violation) {
+        const winner = player === SENTE ? GOTE : SENTE;
+        this.isGameOver = true;
+        this.winner = winner;
+        this.foul = {
+            player,
+            winner,
+            ...violation
+        };
+        this.turn = winner;
     }
 
     move(fromX, fromY, toX, toY, promote) {
@@ -334,11 +403,18 @@ class Shogi {
         if (this.board[x][y] !== null) return false;
         const handIndex = this.hands[this.turn].indexOf(type);
         if (handIndex === -1) return false;
-        if (!this.canDrop(x, y, type, this.turn)) return false;
+        const violation = this.getDropViolation(x, y, type, this.turn);
+        const player = this.turn;
 
-        this.hands[this.turn].splice(handIndex, 1);
-        this.board[x][y] = { type, player: this.turn };
-        this.history.push({ type: 'drop', to: { x, y }, piece: type });
+        this.hands[player].splice(handIndex, 1);
+        this.board[x][y] = { type, player };
+        this.history.push({ type: 'drop', to: { x, y }, piece: type, violation });
+
+        if (violation) {
+            this.declareFoul(player, violation);
+            return true;
+        }
+
         this.turn = this.turn === SENTE ? GOTE : SENTE;
         return true;
     }
